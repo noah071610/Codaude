@@ -81,9 +81,9 @@ Only one of the two is enough — a tool that has never run simply shows no data
 
 ## Commands
 
-| Command                                      | What it does                                 |
-| -------------------------------------------- | -------------------------------------------- |
-| `Codaude: Show Token Usage`               | Focus the **AI Tokens** panel                |
+| Command                                   | What it does                                 |
+| ----------------------------------------- | -------------------------------------------- |
+| `Codaude: Show Token Usage`               | Focus the **Codaude** panel                  |
 | `Codaude: Open Token Usage in New Window` | Open the panel as a detached floating window |
 
 ## Extension Settings
