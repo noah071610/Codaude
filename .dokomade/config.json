@@ -1,0 +1,43 @@
+{
+  // Where work logs are written: <logDir>/<author>/<YYYY-MM-DD>.md
+  "logDir": "docs/dokomade",
+
+  // frontend | backend | fullstack | library - decides how changed files are classified.
+  "projectType": "library",
+
+  // Repo-relative directories the classifier matches changed paths against.
+  "classify": {
+    "frontend": {
+      // Pages and route entry points; an edit here is logged as a page change.
+      "pageDirs": [],
+      // Components and helpers shared across pages.
+      "sharedDirs": []
+    },
+    "backend": {
+      // API route handlers; edits here are grouped per REST domain.
+      "routeDirs": []
+    }
+  },
+
+  "commit": {
+    // Days of log files `dokomade commit` scans for staged rows. Minimum 1.
+    "windowDays": 7,
+    // Conventional Commits reference, relative to the repo root.
+    "convention": "commit-convention.md",
+    // CLI that writes the message when committing from a bare terminal:
+    // claude | codex | cursor | gemini | none ("none" prints the brief instead).
+    "ai": "codex",
+    // Set once the CLI above has been chosen; false makes commit ask again.
+    "aiConfigured": true,
+    // Spend tokens describing changed files that have no log row. Off by
+    // default: what survives the noise filter is usually nothing.
+    "analyzeOrphans": false
+  },
+
+  // Extra log destinations beyond the markdown files; each needs its own credentials.
+  "integrations": {
+    "notion": false,
+    "slack": false,
+    "sheets": false
+  }
+}
