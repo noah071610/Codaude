@@ -14,3 +14,4 @@ docs/*
 .codex/
 .cursor/
 .claude/
+.env

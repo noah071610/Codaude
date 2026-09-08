@@ -6,6 +6,7 @@ import {
 	parseClaudeFile,
 	parseCodexFile,
 	parseCodexLimits,
+	mockReport,
 	projectUses,
 	recentPromptUses,
 	sumTotals,
@@ -79,6 +80,17 @@ suite('token parsing', () => {
 		assert.strictEqual(entries[0].project, 'demo-project');
 		assert.deepStrictEqual(entries[0].usage, { input: 200, output: 50, cacheRead: 800, cacheWrite: 0 });
 		assert.deepStrictEqual(entries[1].usage, { input: 200, output: 40, cacheRead: 400, cacheWrite: 0 });
+	});
+});
+
+suite('mock report', () => {
+	test('has enough data to exercise every screenshot section', () => {
+		const report = mockReport(Date.parse('2026-09-08T00:00:00Z'));
+		assert.strictEqual(report.week.claude.days.length, 7);
+		assert.strictEqual(report.recent.claude.length, 8);
+		assert.strictEqual(report.recent.codex.length, 8);
+		assert.strictEqual(report.projects.length, 7);
+		assert.strictEqual(report.limits.claude?.fiveHour?.percent, 42);
 	});
 });
 

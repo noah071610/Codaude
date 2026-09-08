@@ -14,3 +14,13 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+.env
+.dokomade/**
+Master.md
+images/*.mp4
+.claude/**
+.codex/**
+.cursor/**
+docs/**
+scripts/**
+CLAUDE.md

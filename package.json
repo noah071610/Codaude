@@ -1,13 +1,39 @@
 {
-  "name": "ai-tracker",
-  "displayName": "AI Token Tracker",
-  "description": "Track Claude Code and Codex token usage in real time from the status bar.",
+  "name": "codaude",
+  "displayName": "Codaude — Claude Code & Codex Token Usage Tracker",
+  "description": "Track Claude Code and Codex token usage and rate limits in real time from the VS Code status bar. Local logs only, no API keys.",
   "version": "0.0.1",
+  "publisher": "noah071610",
+  "license": "MIT",
+  "icon": "images/logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/noah071610/Codaude.git"
+  },
+  "bugs": {
+    "url": "https://github.com/noah071610/Codaude/issues"
+  },
+  "homepage": "https://github.com/noah071610/Codaude#readme",
   "engines": {
     "vscode": "^1.135.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "codex",
+    "openai",
+    "anthropic",
+    "token",
+    "usage",
+    "tokens",
+    "rate limit",
+    "ai",
+    "tracker",
+    "status bar"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -16,23 +42,25 @@
   "contributes": {
     "commands": [
       {
-        "command": "ai-tracker.showDetails",
-        "title": "AI Tracker: Show Token Usage"
+        "command": "codaude.showDetails",
+        "title": "Show Token Usage",
+        "category": "Codaude"
       },
       {
-        "command": "ai-tracker.openWindow",
-        "title": "AI Tracker: Open Token Usage in New Window"
+        "command": "codaude.openWindow",
+        "title": "Open Token Usage in New Window",
+        "category": "Codaude"
       }
     ],
     "icons": {
-      "ai-tracker-claude": {
+      "codaude-claude": {
         "description": "Claude Code",
         "default": {
           "fontPath": "./media/ai-icons.woff",
           "fontCharacter": "\\E900"
         }
       },
-      "ai-tracker-codex": {
+      "codaude-codex": {
         "description": "Codex",
         "default": {
           "fontPath": "./media/ai-icons.woff",
@@ -43,17 +71,17 @@
     "viewsContainers": {
       "panel": [
         {
-          "id": "aiTracker",
+          "id": "codaude",
           "title": "AI Tokens",
-          "icon": "$(ai-tracker-claude)"
+          "icon": "$(codaude-claude)"
         }
       ]
     },
     "views": {
-      "aiTracker": [
+      "codaude": [
         {
           "type": "webview",
-          "id": "aiTracker.usage",
+          "id": "codaude.usage",
           "name": "Token Usage"
         }
       ]
@@ -76,20 +104,18 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "24.x",
-    "@types/vscode": "^1.136.0",
+    "@types/vscode": "^1.135.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
     "esbuild": "^0.28.1",
     "eslint": "^10.5.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1"
+    "typescript-eslint": "^8.61.1",
+    "dokomade": "file:../Projects/@Library/dokomade/dokomade-1.0.0.tgz"
   },
   "overrides": {
     "diff": "^8.0.4",
     "serialize-javascript": "^7.0.6"
-  },
-  "dependencies": {
-    "dokomade": "file:../Projects/@Library/dokomade/dokomade-1.0.0.tgz"
   }
 }

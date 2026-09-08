@@ -327,6 +327,70 @@ export function projectUses(entries: Entry[], starts: Record<Tool, number>): Pro
 	return [...grouped.values()].sort((a, b) => b.total - a.total || a.project.localeCompare(b.project));
 }
 
+function mockTokens(tokens: number): Totals {
+	return { input: tokens * 0.2, output: tokens * 0.1, cacheRead: tokens * 0.6, cacheWrite: tokens * 0.1 };
+}
+
+function mockPrompts(now: number, items: [string, number, string][]): PromptUse[] {
+	return items.map(([prompt, tokens, project], i) => ({
+		ts: now - (i + 1) * 20 * 60_000,
+		prompt,
+		project,
+		usage: mockTokens(tokens),
+	}));
+}
+
+/** Synthetic data for screenshots; enabled only by explicitly setting IS_MOCK=true. */
+export function mockReport(now = Date.now()): Report {
+	const start = now - 2 * DAY_MS - 60 * 60_000;
+	const reset5h = now + 1 * 60 * 60_000 + 42 * 60_000;
+	const resetWeek = start + WEEK_DAYS * DAY_MS;
+	const limits = {
+		claude: { fiveHour: { percent: 42, resetsAt: reset5h }, week: { percent: 63, resetsAt: resetWeek }, fetchedAt: now - 4 * 60_000 },
+		codex: { fiveHour: { percent: 31, resetsAt: now + 2 * 60 * 60_000 + 18 * 60_000 }, week: { percent: 48, resetsAt: resetWeek }, fetchedAt: now - 7 * 60_000 },
+	} satisfies Report['limits'];
+
+	return {
+		last5h: { claude: 3_205_000, codex: 2_560_000 },
+		recent: {
+			claude: mockPrompts(now, [
+				['Polish the onboarding flow and make the empty states feel more intentional', 1_350_000, 'codaude-web'],
+				['Review the token aggregation logic for edge cases around reset windows', 640_000, 'infra-tools'],
+				['Refactor the dashboard cards without changing the visual hierarchy', 410_000, 'client-dashboard'],
+				['Add loading and error states to the usage panel', 270_000, 'codaude-web'],
+				['Write a concise release note for the new project slider', 205_000, 'docs-site'],
+				['Check the dark theme contrast for secondary labels', 150_000, 'design-system'],
+				['Explain why the weekly pace calculation includes today', 110_000, 'docs-site'],
+				['Suggest three names for the compact status bar label', 70_000, 'codaude-web'],
+			]),
+			codex: mockPrompts(now, [
+				['Implement the API adapter and keep the types narrow at the boundary', 980_000, 'client-dashboard'],
+				['Trace the slow startup path and remove unnecessary filesystem reads', 540_000, 'infra-tools'],
+				['Build a responsive command palette with keyboard navigation', 370_000, 'mobile-app'],
+				['Compare the current layout against the latest product brief', 240_000, 'codaude-web'],
+				['Generate realistic seed records for the analytics preview', 175_000, 'prompt-lab'],
+				['Tighten the README setup instructions for first-time users', 120_000, 'docs-site'],
+				['Find the smallest safe fix for the stale cache indicator', 85_000, 'infra-tools'],
+				['Summarize the changed files for the pull request description', 50_000, 'codaude-web'],
+			]),
+		},
+		projects: [
+			{ project: 'codaude-web', tools: { claude: 3_200_000, codex: 2_400_000 }, total: 5_600_000 },
+			{ project: 'client-dashboard', tools: { claude: 2_700_000, codex: 2_100_000 }, total: 4_800_000 },
+			{ project: 'prompt-lab', tools: { claude: 2_100_000, codex: 2_000_000 }, total: 4_100_000 },
+			{ project: 'mobile-app', tools: { claude: 2_300_000, codex: 1_100_000 }, total: 3_400_000 },
+			{ project: 'infra-tools', tools: { claude: 1_400_000, codex: 2_300_000 }, total: 3_700_000 },
+			{ project: 'docs-site', tools: { claude: 1_000_000, codex: 800_000 }, total: 1_800_000 },
+			{ project: 'design-system', tools: { claude: 800_000, codex: 500_000 }, total: 1_300_000 },
+		],
+		week: {
+			claude: { start, days: [1_100_000, 1_900_000, 2_800_000, 2_400_000, 3_500_000, 2_200_000, 1_600_000] },
+			codex: { start, days: [800_000, 1_400_000, 2_200_000, 1_700_000, 2_900_000, 1_800_000, 1_300_000] },
+		},
+		limits,
+	};
+}
+
 async function jsonlFiles(dir: string, since: number): Promise<string[]> {
 	let names: string[];
 	try {
@@ -376,8 +440,19 @@ async function firstCodexLimits(files: string[]): Promise<ToolLimits | undefined
 	return undefined;
 }
 
+async function mockEnabled(): Promise<boolean> {
+	if (process.env.IS_MOCK?.trim().toLowerCase() === 'true') {
+		return true;
+	}
+	const env = await readFile(path.join(__dirname, '..', '.env'));
+	return /^\s*IS_MOCK\s*=\s*["']?true["']?\s*(?:#.*)?$/im.test(env ?? '');
+}
+
 /** Scan both tools' logs for the last `days` days (files older than that are skipped). */
 export async function scan(days = 7): Promise<Report> {
+	if (await mockEnabled()) {
+		return mockReport();
+	}
 	const since = Date.now() - days * 86_400_000;
 	const [claudeFiles, codexFiles] = await Promise.all([
 		jsonlFiles(CLAUDE_DIR, since),

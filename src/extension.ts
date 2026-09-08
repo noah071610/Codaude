@@ -20,8 +20,8 @@ import {
 } from "./tracker"
 
 const TOOLS: { id: Tool; label: string; icon: string }[] = [
-  { id: "claude", label: "Claude Code", icon: "$(ai-tracker-claude)" },
-  { id: "codex", label: "Codex", icon: "$(ai-tracker-codex)" },
+  { id: "claude", label: "Claude Code", icon: "$(codaude-claude)" },
+  { id: "codex", label: "Codex", icon: "$(codaude-codex)" },
 ]
 
 function pngData(file: string): string {
@@ -37,7 +37,7 @@ const TOOL_IMAGES: Record<Tool, string> = {
   codex: pngData("chatgpt.png"),
 }
 
-const VIEW_ID = "aiTracker.usage"
+const VIEW_ID = "codaude.usage"
 
 let statusBar: vscode.StatusBarItem
 let view: vscode.WebviewView | undefined
@@ -46,16 +46,16 @@ let latest: Report | undefined
 
 export function activate(context: vscode.ExtensionContext) {
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
-  statusBar.command = "ai-tracker.showDetails"
-  statusBar.text = "$(ai-tracker-claude) … $(ai-tracker-codex) …"
+  statusBar.command = "codaude.showDetails"
+  statusBar.text = "$(codaude-claude) … $(codaude-codex) …"
   statusBar.show()
   context.subscriptions.push(statusBar)
 
   context.subscriptions.push(
     // `<viewId>.focus` is contributed automatically; it opens the bottom panel on the view
-    vscode.commands.registerCommand("ai-tracker.showDetails", () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),
-    vscode.commands.registerCommand("ai-tracker.openWindow", async () => {
-      const win = vscode.window.createWebviewPanel("aiTracker", "AI Token Usage", vscode.ViewColumn.Active, {
+    vscode.commands.registerCommand("codaude.showDetails", () => vscode.commands.executeCommand(`${VIEW_ID}.focus`)),
+    vscode.commands.registerCommand("codaude.openWindow", async () => {
+      const win = vscode.window.createWebviewPanel("codaude", "Codaude — Token Usage", vscode.ViewColumn.Active, {
         enableScripts: true,
       })
       win.webview.html = latest ? render(latest) : "<p>Loading…</p>"
@@ -66,7 +66,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     // limits and the week anchor live in settings, so a change re-renders
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("aiTracker")) {
+      if (e.affectsConfiguration("codaude")) {
         refresh()
       }
     }),
@@ -124,7 +124,7 @@ async function refresh() {
     latest = await scan()
   } catch (err) {
     statusBar.text = "$(warning) AI"
-    statusBar.tooltip = `ai-tracker: ${err}`
+    statusBar.tooltip = `Codaude: ${err}`
     return
   }
   const short = (id: Tool) => {
@@ -158,7 +158,7 @@ function spark(days: number[]): string {
 
 function tooltip(report: Report): vscode.MarkdownString {
   const tip = new vscode.MarkdownString("", true)
-  tip.isTrusted = { enabledCommands: ["ai-tracker.showDetails", "ai-tracker.openWindow"] }
+  tip.isTrusted = { enabledCommands: ["codaude.showDetails", "codaude.openWindow"] }
 
   const line = (label: string, win: LimitWindow | undefined, tokens: number) =>
     win
@@ -180,8 +180,8 @@ function tooltip(report: Report): vscode.MarkdownString {
   }
 
   tip.appendMarkdown(
-    "\n[$(window) Open in window](command:ai-tracker.openWindow) &nbsp; " +
-      "[$(layout-panel) Open in panel](command:ai-tracker.showDetails)",
+    "\n[$(window) Open in window](command:codaude.openWindow) &nbsp; " +
+      "[$(layout-panel) Open in panel](command:codaude.showDetails)",
   )
   return tip
 }
