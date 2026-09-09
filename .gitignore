@@ -4,12 +4,6 @@ node_modules
 .vscode-test/
 *.vsix
 
-# dokomade runtime state
-.dokomade/state.json
-.dokomade/pending.jsonl
-.dokomade/queue.jsonl
-.dokomade/perf.jsonl
-
 docs/*
 .codex/
 .cursor/

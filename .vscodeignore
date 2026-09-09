@@ -15,7 +15,6 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 .env
-.dokomade/**
 Master.md
 images/*.mp4
 .claude/**
