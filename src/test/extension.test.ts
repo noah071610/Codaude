@@ -10,6 +10,7 @@ import {
 	projectUses,
 	recentPromptUses,
 	sumTotals,
+	weeklyDayPercents,
 	weekSlots,
 } from '../tracker';
 
@@ -177,6 +178,16 @@ suite('week slots', () => {
 		const recent = recentPromptUses(entries, 'claude', start);
 		assert.strictEqual(recent.length, 1);
 		assert.strictEqual(sumTotals(recent[0].usage), 5);
+	});
+
+	test('allocates the weekly percentage across daily segments', () => {
+		const start = Date.parse('2026-09-01T00:00:00Z');
+		const shares = weeklyDayPercents(
+			{ start, days: [1, 2, 3, 4, 0, 0, 0] },
+			{ percent: 26, resetsAt: start + 7 * DAY_MS },
+		);
+		assert.deepStrictEqual(shares.map((n) => Number(n.toFixed(1))), [2.6, 5.2, 7.8, 10.4, 0, 0, 0]);
+		assert.strictEqual(shares.reduce((sum, n) => sum + n, 0), 26);
 	});
 
 	test('ranks project usage across both tools', () => {

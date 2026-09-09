@@ -287,6 +287,13 @@ export function weekSlots(entries: Entry[], tool: Tool, start: number): number[]
 	return days;
 }
 
+/** Each day's share of the provider's reported weekly limit. */
+export function weeklyDayPercents(use: WindowUse, week: LimitWindow | undefined): number[] {
+	const total = use.days.reduce((sum, n) => sum + n, 0);
+	const fill = week ? Math.min(Math.max(week.percent, 0), 100) : 0;
+	return total ? use.days.map((tokens) => (fill * tokens) / total) : use.days.map(() => 0);
+}
+
 export function recentPromptUses(entries: Entry[], tool: Tool, start: number): PromptUse[] {
 	const grouped = new Map<string, PromptUse>();
 	for (const entry of entries) {

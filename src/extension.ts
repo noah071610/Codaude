@@ -17,6 +17,7 @@ import {
   formatTokens,
   scan,
   sumTotals,
+  weeklyDayPercents,
 } from "./tracker"
 
 const TOOLS: { id: Tool; label: string; icon: string }[] = [
@@ -220,14 +221,14 @@ function stale(fetchedAt: number): string {
  */
 function donut(use: WindowUse, week: LimitWindow | undefined): string {
   const total = use.days.reduce((s, n) => s + n, 0)
-  const fill = week ? Math.min(week.percent, 100) : 0
+  const shares = weeklyDayPercents(use, week)
 
   let offset = 0
   const segs = use.days
-    .map((tokens, i) => ({ tokens, color: DAY_COLORS[i], start: use.start + i * DAY_MS }))
+    .map((tokens, i) => ({ tokens, i, color: DAY_COLORS[i], start: use.start + i * DAY_MS }))
     .filter((d) => d.tokens > 0)
     .map((d) => {
-      const p = total ? (fill * d.tokens) / total : 0
+      const p = shares[d.i] ?? 0
       const seg = `<circle class="seg" cx="21" cy="21" r="${RING_R}"
 				stroke-dasharray="${p.toFixed(3)} ${(100 - p).toFixed(3)}"
 				stroke-dashoffset="${(-offset).toFixed(3)}"
@@ -265,13 +266,21 @@ function todayBar(use: WindowUse, week: LimitWindow | undefined): string {
   const total = use.days.reduce((sum, n) => sum + n, 0)
   const i = Math.min(Math.floor((Date.now() - use.start) / DAY_MS), WEEK_DAYS - 1)
   const tokens = use.days[i] ?? 0
-  const percent = week && total ? Math.min((week.percent * tokens) / total, 100) : 0
+  const shares = weeklyDayPercents(use, week)
+  const percent = shares[i] ?? 0
+  const segments = shares
+    .map((share, day) =>
+      share > 0
+        ? `<span class="day-fill${day < i ? " past" : ""}${day === i ? " today" : ""}${day === i && i === 0 ? " first-today" : ""}" style="width:${share.toFixed(3)}%;--day-color:${DAY_COLORS[day]}" title="${mmdd(use.start + day * DAY_MS)} — ${formatTokens(use.days[day])} tokens (${share.toFixed(1)}% of 7d limit)"></span>`
+        : "",
+    )
+    .join("")
   return `<div class="prog">
 		<div class="prog-head">
 			<span>Today's usage (based on 7d limit)</span>
 			<span>${week && total ? `${percent.toFixed(1)}%` : formatTokens(tokens)}</span>
 		</div>
-		<div class="track"><div class="fill" style="width:${percent.toFixed(1)}%"></div></div>
+		<div class="track day-track">${segments}</div>
 		<div class="sub">${formatTokens(tokens)} tokens · Day ${i + 1}</div>
 	</div>`
 }
@@ -455,7 +464,12 @@ function render(report: Report): string {
 	.prog-head, .vs-head { display: flex; justify-content: space-between; opacity: .7; margin-bottom: 4px; }
 	.sub { opacity: .5; font-size: 11px; margin-top: 4px; }
 	.track { height: 8px; border-radius: 4px; background: var(--vscode-panel-border); overflow: hidden; }
-	.fill { height: 100%; background: var(--c); }
+	.fill { height: 100%; background: var(--c); border-radius: 4px; }
+	.day-track { display: flex; }
+	.day-fill { flex: 0 0 auto; height: 100%; background: var(--day-color); }
+	.day-fill.past { background: #808080; opacity: .5; }
+	.day-fill.today { border-radius: 0 4px 4px 0; }
+	.day-fill.today.first-today { border: 4px solid var(--fill-color); }
 	.day-legend { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 12px; font-size: 10px; opacity: .8; }
 	.day-chip { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 	.day-chip.off { opacity: .35; }
