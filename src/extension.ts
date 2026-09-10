@@ -25,6 +25,43 @@ const TOOLS: { id: Tool; label: string; icon: string }[] = [
   { id: "codex", label: "Codex", icon: "$(codaude-codex)" },
 ]
 
+/**
+ * Assigning `webview.html` reloads the document, which throws away scroll position and
+ * any expanded prompt lists. A poll every minute mostly produces an identical report, so
+ * the html is only swapped when it really changed; the clock is pushed separately as a
+ * message and written into the live document.
+ */
+const painted = new WeakMap<vscode.Webview, string>()
+
+function paint(webview: vscode.Webview) {
+  const html = latest ? render(latest) : "<p>Loading…</p>"
+  if (painted.get(webview) !== html) {
+    painted.set(webview, html)
+    webview.html = html
+  }
+  postStamp(webview)
+}
+
+function postStamp(webview: vscode.Webview) {
+  webview.postMessage({ type: "scannedAt", text: scannedAt ? `Updated ${stamp(scannedAt)}` : "" })
+}
+
+function wire(webview: vscode.Webview, disposables: vscode.Disposable[]) {
+  webview.onDidReceiveMessage(
+    (msg) => {
+      if (msg?.type === "refresh") {
+        refresh()
+      } else if (msg?.type === "ready") {
+        // a freshly loaded document has no clock yet, and a message sent before its
+        // listener existed is dropped, so it asks for the value itself
+        postStamp(webview)
+      }
+    },
+    null,
+    disposables,
+  )
+}
+
 function pngData(file: string): string {
   try {
     return `data:image/png;base64,${fs.readFileSync(path.join(__dirname, "..", "src", "assets", file)).toString("base64")}`
@@ -44,6 +81,11 @@ let statusBar: vscode.StatusBarItem
 let view: vscode.WebviewView | undefined
 let floating: vscode.WebviewPanel | undefined
 let latest: Report | undefined
+/** epoch ms of the scan that produced `latest`; shown in the panel header */
+let scannedAt = 0
+
+/** How often to re-scan on our own, so the panel never depends solely on file watchers. */
+const POLL_MS = 60_000
 
 export function activate(context: vscode.ExtensionContext) {
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100)
@@ -59,7 +101,8 @@ export function activate(context: vscode.ExtensionContext) {
       const win = vscode.window.createWebviewPanel("codaude", "Codaude — Token Usage", vscode.ViewColumn.Active, {
         enableScripts: true,
       })
-      win.webview.html = latest ? render(latest) : "<p>Loading…</p>"
+      paint(win.webview)
+      wire(win.webview, context.subscriptions)
       // detach the tab into its own floating window, which closes with its own X
       await vscode.commands.executeCommand("workbench.action.moveEditorToNewWindow")
       floating = win
@@ -78,13 +121,20 @@ export function activate(context: vscode.ExtensionContext) {
           v.webview.options = { enableScripts: true }
           view = v
           v.onDidDispose(() => (view = undefined))
-          // the view is torn down when hidden, so re-render whenever it comes back
+          wire(v.webview, context.subscriptions)
+          // the view is torn down when hidden, so repaint AND re-scan whenever it comes
+          // back: `latest` may be hours old if nothing wrote to the logs meanwhile
           v.onDidChangeVisibility(() => {
             if (v.visible) {
-              v.webview.html = latest ? render(latest) : "<p>Loading…</p>"
+              // the document was torn down while hidden, so the memo no longer describes
+              // anything on screen: drop it or paint() would skip a needed re-assign
+              painted.delete(v.webview)
+              paint(v.webview)
+              refresh()
             }
           })
-          v.webview.html = latest ? render(latest) : "<p>Loading…</p>"
+          paint(v.webview)
+          refresh()
         },
       },
       { webviewOptions: { retainContextWhenHidden: false } },
@@ -103,7 +153,11 @@ export function activate(context: vscode.ExtensionContext) {
   const stateWatcher = vscode.workspace.createFileSystemWatcher(
     new vscode.RelativePattern(vscode.Uri.file(path.dirname(CLAUDE_STATE)), path.basename(CLAUDE_STATE)),
   )
+  // the CLI rewrites this file by writing a temp file and renaming it over the old one,
+  // so the event that lands is a create (and sometimes a delete), never a plain change
   stateWatcher.onDidChange(refreshSoon, null, context.subscriptions)
+  stateWatcher.onDidCreate(refreshSoon, null, context.subscriptions)
+  stateWatcher.onDidDelete(refreshSoon, null, context.subscriptions)
   context.subscriptions.push(stateWatcher)
 
   for (const dir of [CLAUDE_DIR, CODEX_DIR]) {
@@ -117,12 +171,31 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(watcher)
   }
 
+  // watchers on paths outside the workspace are best-effort: they can be dropped by the
+  // OS under load and never recover. Polling also keeps the relative times ("resets in
+  // 2h", "Day 3") honest when neither tool is writing anything.
+  const poll = setInterval(refresh, POLL_MS)
+  context.subscriptions.push(new vscode.Disposable(() => clearInterval(poll)))
+
   refresh()
 }
 
-async function refresh() {
+/**
+ * Scans are serialised: two overlapping scans can finish out of order and leave `latest`
+ * holding the older of the two. Chaining also means a manual refresh always runs a scan
+ * that starts after the click, so the button really does re-read everything.
+ */
+let queue: Promise<void> = Promise.resolve()
+
+function refresh(): Promise<void> {
+  queue = queue.then(runScan, runScan)
+  return queue
+}
+
+async function runScan() {
   try {
     latest = await scan()
+    scannedAt = Date.now()
   } catch (err) {
     statusBar.text = "$(warning) AI"
     statusBar.tooltip = `Codaude: ${err}`
@@ -137,10 +210,10 @@ async function refresh() {
   statusBar.tooltip = tooltip(latest)
 
   if (view?.visible) {
-    view.webview.html = render(latest)
+    paint(view.webview)
   }
   if (floating) {
-    floating.webview.html = render(latest)
+    paint(floating.webview)
   }
 }
 
@@ -196,6 +269,13 @@ function mmdd(ts: number): string {
   const d = new Date(ts)
   const pad = (n: number) => String(n).padStart(2, "0")
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/** Panel header clock: "2026-09-10 11:15", in the user's local time. */
+function stamp(ts: number): string {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 /** Same shape as the CLI's own "Resets in 4h" / "Resets in 5d". */
@@ -516,7 +596,22 @@ function render(report: Report): string {
 	.vs-codex { background: #4a9eff; }
 
 	hr { border: 0; border-top: 1px solid var(--vscode-panel-border); margin: 22px 0 16px; }
+
+	.topbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+	.stamp { font-size: 11px; opacity: .6; font-variant-numeric: tabular-nums; }
+	.refresh { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; font-size: 11px;
+		color: var(--vscode-foreground); background: transparent; border: 1px solid var(--vscode-panel-border);
+		border-radius: 10px; cursor: pointer; }
+	.refresh:hover { background: var(--vscode-toolbar-hoverBackground); }
+	.refresh i { font-style: normal; line-height: 1; }
+	.refresh.busy { opacity: .55; pointer-events: none; }
+	.refresh.busy i { animation: spin .7s linear infinite; }
+	@keyframes spin { to { transform: rotate(360deg); } }
 </style></head><body>
+<header class="topbar">
+	<span class="stamp"></span>
+	<button class="refresh" type="button" title="Re-scan every Claude and Codex log from disk"><i>↻</i>Refresh</button>
+</header>
 <section class="category">
 	${sectionHeader("◉", "Usage by AI", "Weekly and 5-hour usage for Claude and Codex")}
 	<div class="grid">${panels}</div>
@@ -535,6 +630,21 @@ function render(report: Report): string {
 	${vsBar("This week", weekTokens("claude"), weekTokens("codex"))}
 </section>
 <script>
+	const api = acquireVsCodeApi();
+	const refreshBtn = document.querySelector('.refresh');
+	refreshBtn.addEventListener('click', () => {
+		refreshBtn.classList.add('busy');
+		api.postMessage({ type: 'refresh' });
+	});
+	// every finished scan sends the clock, whether or not the document was replaced,
+	// so it doubles as the signal that the manual refresh is done
+	window.addEventListener('message', (event) => {
+		if (event.data && event.data.type === 'scannedAt') {
+			document.querySelector('.stamp').textContent = event.data.text;
+			refreshBtn.classList.remove('busy');
+		}
+	});
+	api.postMessage({ type: 'ready' });
 	document.querySelectorAll('.more').forEach((button) => button.addEventListener('click', () => {
 		const list = button.previousElementSibling;
 		[...list.querySelectorAll('.prompt-row[hidden]')].slice(0, 5).forEach((row) => row.removeAttribute('hidden'));

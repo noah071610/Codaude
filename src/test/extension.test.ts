@@ -96,21 +96,32 @@ suite('mock report', () => {
 });
 
 suite('limit windows', () => {
+	const CLAUDE_STATE_JSON = JSON.stringify({
+		cachedUsageUtilization: {
+			fetchedAtMs: 1788836778048,
+			utilization: {
+				five_hour: { utilization: 25, resets_at: '2026-09-08T07:20:00.000+00:00' },
+				seven_day: { utilization: 10, resets_at: '2026-09-13T14:00:00.000+00:00' },
+			},
+		},
+	});
+
 	test('claude: reads the cached /usage utilization', () => {
-		const l = claudeLimits(
-			JSON.stringify({
-				cachedUsageUtilization: {
-					fetchedAtMs: 1788836778048,
-					utilization: {
-						five_hour: { utilization: 25, resets_at: '2026-09-08T07:20:00.000+00:00' },
-						seven_day: { utilization: 10, resets_at: '2026-09-13T14:00:00.000+00:00' },
-					},
-				},
-			})
-		)!;
+		const l = claudeLimits(CLAUDE_STATE_JSON, Date.parse('2026-09-08T00:00:00Z'))!;
 		assert.strictEqual(l.fiveHour?.percent, 25);
 		assert.strictEqual(l.week?.percent, 10);
 		assert.strictEqual(l.week?.resetsAt, Date.parse('2026-09-13T14:00:00Z'));
+	});
+
+	/**
+	 * The CLI only refreshes this cache when it feels like it, so a 5-hour window that
+	 * reset hours ago sits in the file untouched. Reporting its percentage pins the panel
+	 * to a number that can never move — the exact "is this even up to date?" bug.
+	 */
+	test('claude: an already-reset window is dropped, live ones survive', () => {
+		const l = claudeLimits(CLAUDE_STATE_JSON, Date.parse('2026-09-10T02:00:00Z'))!;
+		assert.strictEqual(l.fiveHour, undefined, '5h window reset two days ago');
+		assert.strictEqual(l.week?.percent, 10, 'the weekly window has not reset yet');
 	});
 
 	test('codex: last snapshot wins, windows keyed by length', () => {
@@ -126,10 +137,15 @@ suite('limit windows', () => {
 					},
 				},
 			});
-		const l = parseCodexLimits(`${snap(1, 1788852543)}\n${snap(7, 1788852999)}\n`)!;
+		const text = `${snap(1, 1788852543)}\n${snap(7, 1788852999)}\n`;
+		const l = parseCodexLimits(text, 1788852000 * 1000)!;
 		assert.strictEqual(l.fiveHour?.percent, 7);
 		assert.strictEqual(l.fiveHour?.resetsAt, 1788852999 * 1000);
 		assert.strictEqual(l.week?.percent, 2);
+
+		const expired = parseCodexLimits(text, 1788900000 * 1000)!;
+		assert.strictEqual(expired.fiveHour, undefined, 'both windows reset before `now`');
+		assert.strictEqual(expired.week, undefined);
 	});
 
 	test('no snapshot in the file', () => {

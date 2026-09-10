@@ -219,8 +219,20 @@ export function parseCodexFile(text: string): Entry[] {
 	return out;
 }
 
+/**
+ * A window whose reset time has already passed is dead data: the provider reset it
+ * long ago and simply has not told us yet. Reporting its percentage would pin the UI
+ * to a number that can never move, so an expired window is dropped entirely and the
+ * caller falls back to counting tokens over the real trailing window.
+ */
+function liveWindow(percent: unknown, resetsAt: number, now: number): LimitWindow | undefined {
+	return typeof percent === 'number' && Number.isFinite(resetsAt) && resetsAt > now
+		? { percent, resetsAt }
+		: undefined;
+}
+
 /** `~/.claude.json` holds the last utilization the CLI fetched: real percentages, real reset times. */
-export function claudeLimits(json: string): ToolLimits | undefined {
+export function claudeLimits(json: string, now = Date.now()): ToolLimits | undefined {
 	let raw: any;
 	try {
 		raw = JSON.parse(json);
@@ -233,14 +245,12 @@ export function claudeLimits(json: string): ToolLimits | undefined {
 		return undefined;
 	}
 	const win = (w: any): LimitWindow | undefined =>
-		typeof w?.utilization === 'number' && w?.resets_at
-			? { percent: w.utilization, resetsAt: Date.parse(w.resets_at) }
-			: undefined;
+		w?.resets_at ? liveWindow(w.utilization, Date.parse(w.resets_at), now) : undefined;
 	return { fiveHour: win(u.five_hour), week: win(u.seven_day), fetchedAt: cached.fetchedAtMs ?? 0 };
 }
 
 /** Codex stamps the same numbers onto every `token_count` event; the last one in the file wins. */
-export function parseCodexLimits(text: string): ToolLimits | undefined {
+export function parseCodexLimits(text: string, now = Date.now()): ToolLimits | undefined {
 	const lines = text.split('\n');
 	for (let i = lines.length - 1; i >= 0; i--) {
 		if (!lines[i].includes('"rate_limits"')) {
@@ -259,9 +269,7 @@ export function parseCodexLimits(text: string): ToolLimits | undefined {
 		// windows are identified by their length, not by primary/secondary
 		const win = (mins: number): LimitWindow | undefined => {
 			const w = [rl.primary, rl.secondary].find((x) => x?.window_minutes === mins);
-			return typeof w?.used_percent === 'number' && w?.resets_at
-				? { percent: w.used_percent, resetsAt: w.resets_at * 1000 }
-				: undefined;
+			return w?.resets_at ? liveWindow(w.used_percent, w.resets_at * 1000, now) : undefined;
 		};
 		return {
 			fiveHour: win(FIVE_HOURS_MS / 60_000),
