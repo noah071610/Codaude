@@ -1,9 +1,13 @@
 # Change Log
 
-All notable changes to the "ai-tracker" extension will be documented in this file.
+All notable changes to the "codaude" extension are documented in this file.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [0.0.3]
 
-## [Unreleased]
+- Fixed AI log sync issues
+- Show weekly limits by day
+- Package updates
 
-- Initial release
+## [0.0.2]
+
+- Initial marketplace release

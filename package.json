@@ -2,7 +2,7 @@
   "name": "codaude",
   "displayName": "Codaude — Claude Code & Codex Token Usage Tracker",
   "description": "Track Claude Code and Codex token usage and rate limits in real time from the VS Code status bar. Local logs only, no API keys.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "noah071610",
   "license": "MIT",
   "icon": "images/logo.png",
